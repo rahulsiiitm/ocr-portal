@@ -1,103 +1,64 @@
+// src/app/page.tsx
 "use client";
 
 import { useState, DragEvent, ChangeEvent } from 'react';
 import axios from 'axios';
-
-interface Stats {
-  word_count: number;
-  sentence_count: number;
-  char_count: number;
-  avg_word_length: number;
-}
-
-interface OCRResponse {
-  text: string;
-  stats: Stats;
-}
+import { useOCR } from './hooks/useOCR'
 
 export default function Home() {
-  const [text, setText] = useState<string>('');
-  const [stats, setStats] = useState<Stats | null>(null);
-  const [loading, setLoading] = useState<boolean>(false);
-  const [dragActive, setDragActive] = useState<boolean>(false);
+  // 1. Use the Hook
+  const { state, processFile, reset } = useOCR();
 
-  // --- Logic remains identical to before ---
-  const processFile = async (file: File) => {
-    const formData = new FormData();
-    formData.append('file', file);
+  // Local UI state (Drag highlight doesn't need to be global)
+  const [dragActive, setDragActive] = useState(false);
 
-    setLoading(true);
-    try {
-      const res = await axios.post<OCRResponse>('http://localhost:5000/process-image', formData);
-      setText(res.data.text);
-      setStats(res.data.stats);
-    } catch (err) {
-      console.error(err);
-      alert("Error processing image.");
-    }
-    setLoading(false);
-  };
-
+  // --- Handlers (Simplified) ---
   const handleUpload = (e: ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) processFile(e.target.files[0]);
+    if (e.target.files?.[0]) processFile(e.target.files[0]);
   };
 
   const handleDrag = (e: DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    e.stopPropagation();
+    e.preventDefault(); e.stopPropagation();
     if (e.type === "dragenter" || e.type === "dragover") setDragActive(true);
     else if (e.type === "dragleave") setDragActive(false);
   };
 
   const handleDrop = (e: DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    e.stopPropagation();
+    e.preventDefault(); e.stopPropagation();
     setDragActive(false);
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) processFile(e.dataTransfer.files[0]);
+    if (e.dataTransfer.files?.[0]) processFile(e.dataTransfer.files[0]);
   };
 
   const handleDownload = async () => {
+    if (!state.text) return;
     try {
-      const response = await axios.post('http://localhost:5000/download-docx', { text }, { responseType: 'blob' });
+      const response = await axios.post('http://localhost:5000/download-docx', { text: state.text }, { responseType: 'blob' });
       const url = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement('a');
       link.href = url;
       link.setAttribute('download', 'converted_text.docx');
       document.body.appendChild(link);
       link.click();
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
-  const handleReset = () => {
-    setText('');
-    setStats(null);
+    } catch (err) { console.error(err); }
   };
 
   return (
     <div className="min-h-screen">
-      {/* minimalist header */}
       <header className="header">
-        <h1 className="logo">OCR-Portal</h1>
+        <h1 className="logo">OCR Portal</h1>
       </header>
 
       <main className="main-container">
 
-        {/* State 1: Upload (Visible only when no text) */}
-        {!text && (
+        {/* VIEW 1: Upload (Shows when Idle OR Error) */}
+        {(state.status === 'idle' || state.status === 'error') && (
           <div className="upload-wrapper">
             <h2 className="title">Upload Document</h2>
-            <p className="subtitle">
-              Supports JPG, PNG in English, Hindi, Sanskrit, Marathi, Tamil, Punjabi & Japanese
-            </p>
+            <p className="subtitle">Supports Hindi, Sanskrit, Marathi, Tamil, Punjabi, Japanese & English</p>
 
             <div
               className={`drop-zone ${dragActive ? "active" : ""}`}
-              onDragEnter={handleDrag}
-              onDragLeave={handleDrag}
-              onDragOver={handleDrag}
-              onDrop={handleDrop}
+              onDragEnter={handleDrag} onDragLeave={handleDrag} onDragOver={handleDrag} onDrop={handleDrop}
             >
               <input type="file" id="file-upload" onChange={handleUpload} accept="image/*" />
               <label htmlFor="file-upload">
@@ -105,50 +66,56 @@ export default function Home() {
                 <span>Drag & Drop or Click to Browse</span>
               </label>
             </div>
-            {loading && <p className="loading-text">Analyzing text...</p>}
+
+            {state.status === 'error' && <p style={{ color: 'red', marginTop: '10px' }}>{state.errorMessage}</p>}
           </div>
         )}
 
-        {/* State 2: Results Workspace */}
-        {text && stats && (
-          <div className="workspace">
+        {/* VIEW 2: Loading */}
+        {state.status === 'uploading' && (
+          <div className="processing-container">
+            <div className="spinner"></div>
+            <h3 className="processing-title">Analyzing Document...</h3>
+            <p className="processing-subtitle">Extracting text and calculating statistics</p>
+          </div>
+        )}
 
-            {/* Left: Editor */}
+        {/* VIEW 3: Success Workspace */}
+        {state.status === 'success' && state.text && state.stats && (
+          <div className="workspace">
             <div className="editor-section">
               <div className="toolbar">
                 <span className="label">Extracted Text</span>
                 <div className="actions">
-                  <button onClick={handleReset} className="btn-text">Reset</button>
+                  <button onClick={reset} className="btn-text">Reset</button>
                   <button onClick={handleDownload} className="btn-primary">Download .DOCX</button>
                 </div>
               </div>
               <textarea
-                value={text}
-                onChange={(e) => setText(e.target.value)}
+                value={state.text}
+                readOnly // Or add an onChange handler if you want it editable
                 spellCheck={false}
               />
             </div>
 
-            {/* Right: Minimal Stats */}
             <div className="stats-sidebar">
               <div className="stat-item">
                 <span className="stat-label">Words</span>
-                <span className="stat-value">{stats.word_count}</span>
+                <span className="stat-value">{state.stats.word_count}</span>
               </div>
               <div className="stat-item">
                 <span className="stat-label">Sentences</span>
-                <span className="stat-value">{stats.sentence_count}</span>
+                <span className="stat-value">{state.stats.sentence_count}</span>
               </div>
               <div className="stat-item">
                 <span className="stat-label">Characters</span>
-                <span className="stat-value">{stats.char_count}</span>
+                <span className="stat-value">{state.stats.char_count}</span>
               </div>
               <div className="stat-item">
                 <span className="stat-label">Avg Length</span>
-                <span className="stat-value">{stats.avg_word_length}</span>
+                <span className="stat-value">{state.stats.avg_word_length}</span>
               </div>
             </div>
-
           </div>
         )}
       </main>
