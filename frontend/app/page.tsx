@@ -6,13 +6,11 @@ import axios from 'axios';
 import { useOCR } from './hooks/useOCR'
 
 export default function Home() {
-  // 1. Use the Hook
+
   const { state, processFile, reset } = useOCR();
 
-  // Local UI state (Drag highlight doesn't need to be global)
   const [dragActive, setDragActive] = useState(false);
 
-  // --- Handlers (Simplified) ---
   const handleUpload = (e: ChangeEvent<HTMLInputElement>) => {
     if (e.target.files?.[0]) processFile(e.target.files[0]);
   };
@@ -93,7 +91,7 @@ export default function Home() {
               </div>
               <textarea
                 value={state.text}
-                readOnly // Or add an onChange handler if you want it editable
+                readOnly 
                 spellCheck={false}
               />
             </div>

@@ -19,12 +19,11 @@ def process_image():
     image = Image.open(file.stream)
     
     # OCR PROCESS
-    # lang='eng+hin+san+mar+tam+pan+jpn' tells Tesseract to look for all these languages
     extracted_text = pytesseract.image_to_string(image, lang='eng+hin+san+mar+tam+pan+jpn')    
     
     # STATISTICS CALCULATION
     words = extracted_text.split()
-    sentences = extracted_text.split('.') # Basic split, can be improved with regex
+    sentences = extracted_text.split('.')
     char_count = len(extracted_text)
     avg_word_len = sum(len(word) for word in words) / len(words) if words else 0
     
@@ -48,7 +47,6 @@ def download_docx():
     document.add_heading('OCR Extracted Text', 0)
     document.add_paragraph(text)
     
-    # Save to buffer instead of disk
     f = io.BytesIO()
     document.save(f)
     f.seek(0)
