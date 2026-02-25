@@ -1,6 +1,9 @@
 # OCR Portal
 
-A minimalist and responsive Optical Character Recognition (OCR) web portal that extracts text from images across multiple languages — including Indian regional languages — with export, analytics, and a clean greyscale UI.
+A minimalist and responsive Optical Character Recognition (OCR) web portal that extracts text from images across multiple languages - including Indian regional languages - with export, analytics, and a clean greyscale UI.
+
+# GitHub Repository:
+- https://github.com/rahulsiiitm/ocr-portal
 
 ## Features
 
@@ -48,7 +51,7 @@ Ensure the following are installed:
 
 1. Download installer (UB Mannheim builds recommended)
 2. During installation, enable additional language data:
-   > Hindi, Sanskrit, Tamil, Punjabi, Marathi, Japanese
+   > Hindi, Sanskrit, Japanese
 3. Default path is typically:
 
 ```
@@ -129,5 +132,5 @@ ocr-portal/
 
 ## Author
 
-**Rahul (B.Tech CSE, 2023-2027)**  
+**Rahul 230103021 (B.Tech CSE, 2023-2027)**  
 IIIT Manipur

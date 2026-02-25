@@ -52,7 +52,7 @@ export default function Home() {
         {(state.status === 'idle' || state.status === 'error') && (
           <div className="upload-wrapper">
             <h2 className="title">Upload Document</h2>
-            <p className="subtitle">Supports Hindi, Sanskrit, Marathi, Tamil, Punjabi, Japanese & English</p>
+            <p className="subtitle">Supports Hindi, Sanskrit, Japanese & English</p>
 
             <div
               className={`drop-zone ${dragActive ? "active" : ""}`}
