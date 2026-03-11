@@ -40,6 +40,22 @@ export default function Home() {
     } catch (err) { console.error(err); }
   };
 
+  const [spellResults, setSpellResults] = useState<any[] | null>(null);
+
+  const handleCheckSpelling = async () => {
+    try {
+      const res = await axios.post('http://localhost:5000/check-spelling', { text: state.text });
+      setSpellResults(res.data);
+    } catch (err) {
+      console.error("Spell check failed", err);
+    }
+  };
+
+  const resetWithSpellCheck = () => {
+  reset();            // Clears OCR state
+  setSpellResults(null); // Clears the table
+};
+
   return (
     <div className="min-h-screen">
       <header className="header">
@@ -80,40 +96,77 @@ export default function Home() {
 
         {/* VIEW 3: Success Workspace */}
         {state.status === 'success' && state.text && state.stats && (
-          <div className="workspace">
-            <div className="editor-section">
-              <div className="toolbar">
-                <span className="label">Extracted Text</span>
-                <div className="actions">
-                  <button onClick={reset} className="btn-text">Reset</button>
-                  <button onClick={handleDownload} className="btn-primary">Download .DOCX</button>
+          <div className="workspace-layout">
+            <div className="workspace">
+              <div className="editor-section">
+                <div className="toolbar">
+                  <span className="label">Extracted Text</span>
+                  <div className="actions">
+                    <button onClick={resetWithSpellCheck} className="btn-text">Reset</button>
+                    <button onClick={handleDownload} className="btn-primary">Download .DOCX</button>
+                    <button onClick={handleCheckSpelling} className="btn-secondary">Check Spelling</button>
+                  </div>
+                </div>
+                <textarea
+                  value={state.text}
+                  readOnly
+                  spellCheck={false}
+                />
+              </div>
+
+              <div className="stats-sidebar">
+                <div className="stat-item">
+                  <span className="stat-label">Words</span>
+                  <span className="stat-value">{state.stats.word_count}</span>
+                </div>
+                <div className="stat-item">
+                  <span className="stat-label">Sentences</span>
+                  <span className="stat-value">{state.stats.sentence_count}</span>
+                </div>
+                <div className="stat-item">
+                  <span className="stat-label">Characters</span>
+                  <span className="stat-value">{state.stats.char_count}</span>
+                </div>
+                <div className="stat-item">
+                  <span className="stat-label">Avg Length</span>
+                  <span className="stat-value">{state.stats.avg_word_length}</span>
                 </div>
               </div>
-              <textarea
-                value={state.text}
-                readOnly 
-                spellCheck={false}
-              />
             </div>
 
-            <div className="stats-sidebar">
-              <div className="stat-item">
-                <span className="stat-label">Words</span>
-                <span className="stat-value">{state.stats.word_count}</span>
+            {spellResults && (
+              <div className="spell-check-results">
+                <table className="spell-table">
+                  <thead>
+                    <tr>
+                      <th>Word</th>
+                      <th>Hamming</th>
+                      <th>LCS</th>
+                      <th>Levenshtein</th>
+                      <th>Jaro</th>
+                      <th>Benchmark</th>
+                      <th>Result</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {spellResults.map((res, i) => (
+                      <tr key={i}>
+                        <td>{res.word}</td>
+                        <td>{res.hamming}</td>
+                        <td>{res.lcs}</td>
+                        <td>{res.levenshtein}</td>
+                        <td>{res.jaro}</td>
+                        <td>{res.benchmark}</td>
+                        <td className={res.status === "Correct" ? "text-green" : "text-red"}>
+                          {res.status}
+                          {res.partial && <div className="partial-hint">{res.partial}</div>}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
-              <div className="stat-item">
-                <span className="stat-label">Sentences</span>
-                <span className="stat-value">{state.stats.sentence_count}</span>
-              </div>
-              <div className="stat-item">
-                <span className="stat-label">Characters</span>
-                <span className="stat-value">{state.stats.char_count}</span>
-              </div>
-              <div className="stat-item">
-                <span className="stat-label">Avg Length</span>
-                <span className="stat-value">{state.stats.avg_word_length}</span>
-              </div>
-            </div>
+            )}
           </div>
         )}
       </main>

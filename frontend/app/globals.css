@@ -259,3 +259,100 @@ textarea {
   from { opacity: 0; transform: translateY(10px); }
   to { opacity: 1; transform: translateY(0); }
 }
+
+/* Workspace Layout for OCR + Spell Table */
+.workspace-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 30px;
+}
+
+/* Spell Check Results Container */
+.spell-check-results {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 24px;
+  overflow-x: auto;
+}
+
+/* Minimalist Spell Table */
+.spell-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+.spell-table th {
+  text-align: left;
+  padding: 12px;
+  border-bottom: 2px solid var(--border);
+  color: var(--text-main);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-size: 0.7rem;
+}
+
+.spell-table td {
+  padding: 14px 12px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+  color: var(--text-main);
+}
+
+.spell-table tr:last-child td {
+  border-bottom: none;
+}
+
+.spell-table tr:hover {
+  background-color: #FAFAFA;
+}
+
+/* Distance column formatting */
+.spell-table td:nth-child(n+2):nth-child(-n+6) {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--text-muted);
+}
+
+/* Status colors */
+.text-green {
+  color: #16a34a;
+  font-weight: 600;
+}
+
+.text-red {
+  color: #dc2626;
+  font-weight: 600;
+}
+
+/* Agglutinative Backoff Highlight */
+.partial-hint {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  margin-top: 6px;
+  padding: 4px 8px;
+  background-color: #F5F5F5;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  display: block;
+}
+
+/* Secondary Button (for Check Spelling) */
+.btn-secondary {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  padding: 6px 14px;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-secondary:hover {
+  border-color: var(--text-main);
+  color: var(--text-main);
+  background-color: #F9F9F9;
+}
