@@ -6,43 +6,64 @@ import io
 from docx import Document
 import Levenshtein
 import jellyfish
-import nltk
+import os
 import re
-import random
 
-# --- DOWNLOAD DICTIONARY ---
-nltk.download('words')
-from nltk.corpus import words
-
-# Convert to set for fast lookup O(1)
-ENGLISH_DICTIONARY = set(word.lower() for word in words.words())
-
-# Smaller subset used for benchmark comparison (performance)
-DICTIONARY_SAMPLE = random.sample(list(ENGLISH_DICTIONARY), 5000)
-
-# Path to Tesseract
-pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
+# -----------------------------
+# Tesseract path
+# -----------------------------
+pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
 
 app = Flask(__name__)
 CORS(app)
 
 # ---------------------------------------------------
-# TEXT CLEANING
+# LOAD HINDI DICTIONARY
+# ---------------------------------------------------
+
+def load_hindi_dictionary():
+    hindi_words = set()
+    file_path = "hindi.txt"
+
+    if not os.path.exists(file_path):
+        print("ERROR: hindi.txt not found. Using fallback dictionary.")
+        return {"हिंदी", "भारत", "देवनागरी", "में", "है", "लिखी", "जाती"}
+
+    with open(file_path, "r", encoding="utf-8") as f:
+        for line in f:
+            # 1. Remove metadata
+            line = re.sub(r"\\", "", line)
+            line = re.sub(r"\(.*?\)", "", line)
+            
+            # 2. Extract Devanagari word sequences 
+            words_found = re.findall(r"[\u0900-\u097F]+", line)
+            
+            for w in words_found:
+                if len(w) > 1:
+                    hindi_words.add(w)
+
+    print(f"Dictionary Loaded: {len(hindi_words)} words.")
+    return hindi_words
+
+HINDI_DICTIONARY = load_hindi_dictionary()
+
+# ---------------------------------------------------
+# CLEAN TOKEN
 # ---------------------------------------------------
 
 def clean_token(word):
     """
-    Removes numbers, punctuation, and converts to lowercase
+    Strips punctuation but keeps characters. 
+    Using a regex to delete non-Hindi characters is dangerous 
+    because your OCR uses 'hin+eng' and would delete valid English words.
     """
-    return re.sub(r'[^a-z]', '', word.lower())
-
+    return word.strip('.,!?:;|।"\'()[]{}')
 
 # ---------------------------------------------------
-# DISTANCE METRICS
+# DISTANCE CALCULATIONS
 # ---------------------------------------------------
 
 def get_distances(word, benchmark):
-
     # Hamming Distance
     if len(word) == len(benchmark):
         hamming = sum(c1 != c2 for c1, c2 in zip(word, benchmark))
@@ -51,189 +72,130 @@ def get_distances(word, benchmark):
 
     # LCS Distance (Dynamic Programming)
     m, n = len(word), len(benchmark)
-    dp = [[0]*(n+1) for _ in range(m+1)]
+    dp = [[0] * (n + 1) for _ in range(m + 1)]
 
-    for i in range(1, m+1):
-        for j in range(1, n+1):
-            if word[i-1] == benchmark[j-1]:
-                dp[i][j] = dp[i-1][j-1] + 1
+    for i in range(1, m + 1):
+        for j in range(1, n + 1):
+            if word[i - 1] == benchmark[j - 1]:
+                dp[i][j] = dp[i - 1][j - 1] + 1
             else:
-                dp[i][j] = max(dp[i-1][j], dp[i][j-1])
+                dp[i][j] = max(dp[i - 1][j], dp[i][j - 1])
 
-    lcs_length = dp[m][n]
-    lcs_distance = (m + n) - 2 * lcs_length
+    lcs_len = dp[m][n]
+    lcs_dist = (m + n) - 2 * lcs_len
 
     return {
         "hamming": hamming,
-        "lcs": lcs_distance,
+        "lcs": lcs_dist,
         "levenshtein": Levenshtein.distance(word, benchmark),
         "jaro": round(jellyfish.jaro_similarity(word, benchmark), 3)
     }
 
-
 # ---------------------------------------------------
-# BENCHMARK SELECTION
-# ---------------------------------------------------
-
-def find_benchmark(word):
-    """
-    Finds closest dictionary word using Levenshtein distance.
-    Uses a sampled subset for speed.
-    """
-    return min(DICTIONARY_SAMPLE, key=lambda x: Levenshtein.distance(word, x))
-
-
-# ---------------------------------------------------
-# BACKOFF SEGMENTATION
+# SPELL CHECK
 # ---------------------------------------------------
 
-def backoff_segment(word):
-    """
-    Implements prefix backoff segmentation
-    Example:
-    recordings -> recording + s
-    """
-    for i in range(len(word), 2, -1):
-        prefix = word[:i]
-        if prefix in ENGLISH_DICTIONARY:
-            return {
-                "status": "Partial",
-                "correct_part": prefix,
-                "wrong_part": word[i:],
-                "split_index": i
-            }
-
-    return None
-
-
-# ---------------------------------------------------
-# SPELL CHECK API
-# ---------------------------------------------------
-
-@app.route('/check-spelling', methods=['POST'])
+@app.route("/check-spelling", methods=["POST"])
 def check_spelling():
-
     data = request.json
-    if not data or 'text' not in data:
-        return jsonify({'error': 'No text provided'}), 400
-
-    text = data.get('text', '')
+    text = data.get("text", "")
     tokens = text.split()
-
     results = []
 
+    search_pool = list(HINDI_DICTIONARY)[:2000]
+
     for token in tokens:
-
         clean_word = clean_token(token)
-
         if not clean_word:
             continue
 
-        # Default classification
-        if clean_word in ENGLISH_DICTIONARY:
-            status = "Correct"
-            benchmark = clean_word
-            partial_info = None
-
+        # Check if it's a known Hindi word
+        is_hindi = any('\u0900' <= c <= '\u097F' for c in clean_word)
+        
+        if is_hindi:
+            status = "Correct" if clean_word in HINDI_DICTIONARY else "Wrong"
         else:
+            status = "Correct"
 
-            # Backoff segmentation
-            backoff = backoff_segment(clean_word)
+        partial = None
 
-            if backoff:
-                status = "Partial"
-                benchmark = backoff["correct_part"]
-                partial_info = f"Correct: {backoff['correct_part']} | Wrong: {backoff['wrong_part']}"
-            else:
-                status = "Wrong"
-                benchmark = find_benchmark(clean_word)
-                partial_info = None
+        if status == "Wrong" and is_hindi:
+            for i in range(len(clean_word) - 1, 2, -1):
+                prefix = clean_word[:i]
+                if prefix in HINDI_DICTIONARY:
+                    status = "Partial"
+                    partial = f"Correct: {prefix} | Error: {clean_word[i:]}"
+                    break
 
-        distances = get_distances(clean_word, benchmark)
+        # Benchmark Selection
+        if status == "Correct":
+            benchmark = clean_word
+        else:
+            benchmark = min(search_pool, key=lambda x: Levenshtein.distance(clean_word, x))
+
+        dist = get_distances(clean_word, benchmark)
 
         results.append({
             "word": token,
-            "clean_word": clean_word,
             "benchmark": benchmark,
             "status": status,
-            "partial": partial_info,
-            **distances
+            "partial": partial,
+            **dist
         })
 
     return jsonify(results)
-
 
 # ---------------------------------------------------
 # OCR IMAGE PROCESSING
 # ---------------------------------------------------
 
-@app.route('/process-image', methods=['POST'])
+@app.route("/process-image", methods=["POST"])
 def process_image():
+    if "file" not in request.files:
+        return jsonify({"error": "No file uploaded"}), 400
 
-    if 'file' not in request.files:
-        return jsonify({'error': 'No file uploaded'}), 400
-
-    file = request.files['file']
+    file = request.files["file"]
     image = Image.open(file.stream)
 
-    # Multilingual OCR
-    extracted_text = pytesseract.image_to_string(
-        image,
-        lang='eng+hin+san+mar+tam+pan+jpn'
-    )
+    extracted_text = pytesseract.image_to_string(image, lang="hin+eng")
 
-    words_list = extracted_text.split()
-    sentences = extracted_text.split('.')
+    extracted_text = re.sub(r"\s+", " ", extracted_text).strip()
+
+    words = extracted_text.split()
 
     stats = {
-        'word_count': len(words_list),
-        'sentence_count': len([s for s in sentences if s.strip()]),
-        'char_count': len(extracted_text),
-        'avg_word_length': round(
-            sum(len(w) for w in words_list) / len(words_list),
-            2
-        ) if words_list else 0
+        "word_count": len(words),
+        "sentence_count": len([s for s in extracted_text.split("।") if s.strip()]),
+        "char_count": len(extracted_text),
+        "avg_word_length": round(sum(len(w) for w in words) / len(words), 2) if words else 0
     }
 
     return jsonify({
-        'text': extracted_text,
-        'stats': stats
+        "text": extracted_text,
+        "stats": stats
     })
-
 
 # ---------------------------------------------------
 # DOWNLOAD DOCX
 # ---------------------------------------------------
 
-@app.route('/download-docx', methods=['POST'])
+@app.route("/download-docx", methods=["POST"])
 def download_docx():
+    text = request.json.get("text", "")
+    doc = Document()
+    doc.add_heading("OCR Extracted Text", 0)
+    doc.add_paragraph(text)
 
-    data = request.json
-
-    if not data or 'text' not in data:
-        return jsonify({'error': 'No text provided'}), 400
-
-    text = data.get('text', '')
-
-    document = Document()
-    document.add_heading('OCR Extracted Text', 0)
-    document.add_paragraph(text)
-
-    buffer = io.BytesIO()
-    document.save(buffer)
-    buffer.seek(0)
+    buf = io.BytesIO()
+    doc.save(buf)
+    buf.seek(0)
 
     return send_file(
-        buffer,
+        buf,
         as_attachment=True,
-        download_name='extracted_text.docx',
-        mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+        download_name="extracted_text.docx",
+        mimetype="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
     )
 
-
-# ---------------------------------------------------
-# RUN SERVER
-# ---------------------------------------------------
-
-if __name__ == '__main__':
+if __name__ == "__main__":
     app.run(debug=True, port=5000)
