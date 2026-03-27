@@ -12,7 +12,10 @@ import re
 # -----------------------------
 # Tesseract path
 # -----------------------------
-pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+pytesseract.pytesseract.tesseract_cmd = os.getenv(
+    "TESSERACT_PATH",
+    r"C:\Program Files\Tesseract-OCR\tesseract.exe"  # fallback for local
+)
 
 app = Flask(__name__)
 CORS(app)
